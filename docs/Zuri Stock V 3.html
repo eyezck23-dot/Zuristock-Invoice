@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-lang-key="title">Zuristock - Rechnungs-Vorlage</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load PDF Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* Custom font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+        :root {
+            --primary-blue: #0f4c81; /* Deep Blue from logo */
+            --secondary-gold: #f9a825; /* Gold from logo */
+            --text-color: #333333;
+        }
+
+        body {
+            background-color: #f0f0f0;
+            font-family: 'Inter', sans-serif;
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0; 
+            padding: 0; 
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* New Custom Shadow styles for language/control sections */
+        .shadow-lg-en {
+            box-shadow: 0 10px 20px rgba(15, 76, 129, 0.4), 0 6px 6px rgba(15, 76, 129, 0.3);
+            transition: box-shadow 0.3s ease-in-out;
+        }
+        .shadow-lg-de {
+            box-shadow: 0 10px 20px rgba(160, 0, 0, 0.4), 0 6px 6px rgba(160, 0, 0, 0.3);
+            transition: box-shadow 0.3s ease-in-out;
+        }
+
+        /* --- RESPONSIVE LAYOUT (MOBILE-FIRST) --- */
+
+        /* MAIN LAYOUT: STACKED (COLUMN) ON MOBILE */
+        .main-layout {
+            display: flex;
+            flex-direction: column; /* Stack columns on mobile */
+            align-items: center; /* Center content when stacked */
+            gap: 16px; /* Reduced gap for mobile */
+            padding: 10px; /* Reduced padding for mobile */
+            min-height: 100%;
+        }
+
+        /* Invoice Area Wrapper: Full width on mobile, slight padding */
+        .invoice-area-wrapper {
+            width: 100%; 
+            min-width: unset; /* Remove fixed min-width */
+            max-width: 100%;
+            margin-left: 0; 
+            margin-right: 0;
+            padding: 0 5px; /* Slight side padding */
+            /* This is now the top element on mobile */
+            order: 1; 
+        }
+
+        /* Control Panel (Right Box): Full width on mobile, static position */
+        #control-panel {
+            width: 100%; 
+            max-width: 500px; /* Max width to prevent it from getting too wide */
+            padding: 0 5px; 
+            background-color: transparent; 
+            box-shadow: none; 
+            position: static; /* Remove sticky on mobile */
+            top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            /* This is now the bottom element on mobile */
+            order: 2; 
+        }
+
+        /* Fixed A4 Page Container (Screen Preview Styles) */
+        .invoice-page {
+            /* Mobile-first: Fluid width, auto height, viewport padding */
+            width: 100%; 
+            height: auto; 
+            overflow: hidden; 
+            padding: 4vw !important; /* Use viewport units for padding */
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.4); 
+            background-color: white; 
+            position: relative;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            font-size: 0.85rem; 
+            margin: 0 auto; /* Center the fluid page */
+        }
+
+        /* --- DESKTOP/TABLET (MD) OVERRIDES --- */
+        @media (min-width: 768px) {
+            .main-layout {
+                flex-direction: row; /* Switch back to side-by-side */
+                justify-content: center;
+                align-items: flex-start;
+                gap: 24px; 
+                padding: 20px 0;
+            }
+            
+            .invoice-area-wrapper {
+                width: 210mm; /* Restore A4 width */
+                min-width: 210mm;
+                max-width: 210mm;
+                margin-left: 20px; 
+                margin-right: 20px;
+                padding: 0;
+                order: 1; 
+            }
+            
+            #control-panel {
+                width: 280px; /* Restore fixed control panel width */
+                max-width: 280px;
+                position: sticky; /* Re-apply sticky */
+                top: 20px;
+                padding: 0;
+                order: 2;
+            }
+
+            .invoice-page {
+                width: 210mm; /* Restore A4 width */
+                height: 297mm; /* Restore A4 height */
+                padding: 12.7mm !important; /* Restore A4 padding */
+            }
+        }
+        
+        /* --- STYLING FOR CONTROL PANEL SECTIONS --- */
+        
+        /* Language Section Base - NO BORDER */
+        #language-section, #item-management-section, #sending-section, #printing-section {
+            transition: all 0.3s ease-in-out;
+            background-color: #fafafa;
+        }
+
+        /* Three colors for the language box to mimic the flag when active */
+        .color-band-en-1 { background-color: #1f3a93; } /* Blue */
+        .color-band-en-2 { background-color: #FFFFFF; } /* White */
+        .color-band-en-3 { background-color: #d90000; } /* Red */
+
+        .color-band-de-1 { background-color: #000000; } /* Black */
+        .color-band-de-2 { background-color: #d90000; } /* Red */
+        .color-band-de-3 { background-color: #ffcc00; } /* Gold/Yellow */
+        
+        /* Base button styles */
+        .action-button {
+            transition: all 0.15s ease-in-out;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); 
+            border-radius: 6px; 
+            border: 1px solid transparent;
+        }
+        .action-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+        }
+
+        /* 5. Header Rectangle (Top Left Accent) */
+        .header-rectangle {
+            position: absolute;
+            top: -15px; 
+            left: -15px; 
+            width: 560px; 
+            height: 40px; 
+            background-color: rgba(33, 65, 139); 
+            z-index: 5; 
+            border-bottom-right-radius: 10px;
+        }
+        
+        /* 6. Footer Rectangle (Bottom Right Accent) */
+        .footer-rectangle {
+            position: absolute;
+            bottom: -15px;
+            right: -15px;
+            width: 560px; 
+            height: 40px; 
+            background-color: rgba(33, 65, 139); 
+            z-index: 5; 
+            border-top-left-radius: 10px; 
+        }
+
+        /* Page Spacer for Screen View */
+        .page-spacer {
+            height: 20px;
+            margin: 20px 0;
+            width: 100%;
+            border-top: 2px dashed #ccc;
+            text-align: center;
+            line-height: 0.1em;
+            color: #666;
+            font-size: 0.8rem;
+            display: block; 
+        }
+
+        /* --- DENSITY REDUCTIONS & INPUT STYLING --- */
+        .text-sm.pt-1 p { line-height: 1.2; }
+        .title-block { margin-bottom: 0.5rem; }
+        .title-block h1 { font-size: 1.75rem; }
+        .header-grid { gap: 0.5rem; font-size: 0.75rem; }
+        .header-label, .header-input { font-size: 0.75rem; padding: 1px 0; }
+        .header-input { border-bottom: 1px dashed #ddd; }
+        .intro-text-block { font-size: 0.75rem;}
+        .invoice-table th, .invoice-table td { border: 1px solid #ccc; padding: 2px 4px; font-size: 0.8rem; }
+        .invoice-table th { font-size: 0.75rem; }
+        .invoice-table input { font-size: 0.75rem; }
+        #totals-footer-clone { margin-top: 0.5rem; }
+        #totals-footer-clone .text-sm { font-size: 0.75rem; }
+        #totals-footer-clone .py-1 { padding-top: 1px !important; padding-bottom: 1px !important; }
+        #totals-footer-clone .py-2 { padding-top: 4px !important; padding-bottom: 4px !important; }
+        input[type="text"], input[type="date"], input[type="number"], input[type="email"] {
+            border: none;
+            border-bottom: 1px dashed #ccc;
+            padding: 2px 0;
+            outline: none;
+            width: 100%;
+            transition: border-bottom-color 0.2s;
+            background-color: transparent;
+        }
+        input:focus { border-bottom-color: var(--primary-blue); }
+        .header-input { padding: 2px 4px; background-color: white; border-bottom: 1px solid #ccc; }
+        /* --- END DENSITY REDUCTIONS & INPUT STYLING --- */
+
+        /* Print Media Queries */
+        @media print {
+            @page { size: A4; margin: 0; }
+            body { background: none !important; margin: 0; padding: 0; -webkit-print-color-adjust: exact; color-adjust: exact; }
+            .main-layout { display: block; padding: 0; justify-content: flex-start; gap: 0; }
+            .invoice-area-wrapper { width: auto; margin: 0; padding: 0; }
+            .invoice-page {
+                box-shadow: none; margin: 0 auto; width: 210mm; height: 297mm; 
+                padding: 12.7mm !important; 
+                overflow: visible !important; 
+                background-color: white !important; 
+                page-break-after: always;
+            }
+            .invoice-page:last-child { page-break-after: auto; }
+            .page-spacer, .no-print { display: none !important; }
+            .invoice-table tbody tr { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- MAIN LAYOUT CONTAINER (Invoice Left, Controls Right) -->
+    <div class="main-layout">
+
+        <!-- LEFT COLUMN: Invoice Pages Container -->
+        <!-- Note: Width handled by CSS media query now -->
+        <div class="invoice-area-wrapper">
+             <div id="invoice-pages-wrapper">
+                <!-- Dynamic pages will be rendered here -->
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: New Stylized Control Panel (Fixed on Screen, Hidden on Print) -->
+        <!-- Note: Width and position handled by CSS media query now -->
+        <div id="control-panel" class="no-print p-0 gap-3">
+            <div class="w-full grid grid-cols-1 gap-3">
+
+                <!-- Section 1: Language Selection -->
+                <div id="language-section" class="p-3 shadow-lg-de mx-auto w-full bg-white">
+                    <h2 id="language-header-title" class="text-lg font-bold mb-4 text-center text-gray-800" data-lang-key="section_language">
+                        SPRACHE
+                    </h2>
+                    
+                    <div id="language-colors" class="h-2 mb-4 flex overflow-hidden">
+                        <div id="band-1" class="flex-1 color-band-de-1"></div>
+                        <div id="band-2" class="flex-1 color-band-de-2"></div>
+                        <div id="band-3" class="flex-1 color-band-de-3"></div>
+                    </div>
+
+                    <div class="flex justify-center space-x-3">
+                        <button 
+                            id="btn-en"
+                            onclick="setLanguage('en')" 
+                            class="action-button bg-white text-gray-700 hover:bg-gray-50 font-semibold py-1 px-2 text-center w-full text-xs"
+                        >
+                            English (EN)
+                        </button>
+                        <button 
+                            id="btn-de"
+                            onclick="setLanguage('de')" 
+                            class="action-button bg-black text-white hover:bg-gray-800 font-semibold py-1 px-2 text-center w-full text-xs"
+                        >
+                            German (DE)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section 2: Item Management -->
+                <div id="item-management-section" class="p-3 shadow-lg-de bg-white">
+                    <h2 class="text-lg font-bold mb-4 text-center text-gray-800 flex items-center justify-center">
+                        <!-- Box Icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2 text-purple-600">
+                            <path d="M21 8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/>
+                            <path d="M7 16h10"/>
+                            <path d="M7 12h10"/>
+                            <path d="M7 8h10"/>
+                        </svg>
+                        Item Management
+                    </h2>
+                    <div class="space-y-3 text-sm">
+                        <button onclick="addNewItemRow()" class="action-button w-full py-2 px-4 bg-purple-600 text-white hover:bg-purple-700 font-medium text-center shadow-md text-xs">
+                            Add New Item
+                        </button>
+                        <button onclick="deleteLastItemRow()" class="action-button w-full py-2 px-4 bg-red-500 text-white hover:bg-red-600 font-medium text-center shadow-md text-xs">
+                            Delete Last Item
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section 3: Sending and Printing (Grid) -->
+                <div class="grid grid-cols-2 gap-3">
+
+                    <!-- Sub-section 3.1: Sending (Left) - DYNAMIC SHADOW, FONT SIZE REDUCED -->
+                    <div id="sending-section" class="p-3 shadow-lg-de bg-white">
+                        <h2 class="text-base font-bold mb-4 text-center text-gray-800 flex items-center justify-center">
+                            <!-- Rocket Icon -->
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-1 text-green-600 rotate-45">
+                                <path d="M22 2 11 13"/>
+                                <path d="m22 2-7 20-4-9-9-4 20-7z"/>
+                            </svg>
+                            Sending
+                        </h2>
+                        <!-- Send Button opens the modal - TEXT CHANGED to use data-lang-key="btn_main_send" -->
+                        <button onclick="openSendModal('selection')" data-lang-key="btn_main_send" class="action-button w-full py-2 px-3 bg-green-500 text-white hover:bg-green-600 font-medium text-center shadow-md text-xs">
+                            Senden
+                        </button>
+                    </div>
+
+                    <!-- Sub-section 3.2: Printing (Right) - DYNAMIC SHADOW, FONT SIZE REDUCED -->
+                    <div id="printing-section" class="p-3 shadow-lg-de bg-white">
+                        <h2 class="text-base font-bold mb-4 text-center text-gray-800 flex items-center justify-center">
+                            <!-- Printer Icon -->
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-1 text-indigo-600">
+                                <path d="M6 9V2H18V9"/>
+                                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                                <path d="M6 14h12V22H6z"/>
+                            </svg>
+                            Printing
+                        </h2>
+                        <button onclick="window.print()" class="action-button w-full py-2 px-3 bg-indigo-500 text-white hover:bg-indigo-600 font-medium text-center shadow-md text-xs">
+                            Print Invoice
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEND OPTIONS MODAL (Hidden by default) -->
+    <div id="send-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-6 rounded-md shadow-2xl w-full max-w-sm transform transition-all">
+            
+            <h2 class="text-xl font-bold mb-4 text-[var(--primary-blue)]" data-lang-key="modal_send_title">Rechnung Senden</h2>
+            
+            <!-- 1. MODE SELECTION -->
+            <div id="modal-selection" class="space-y-3">
+                 <p class="mb-6 text-gray-600 text-sm" data-lang-key="modal_send_description">Wählen Sie die gewünschte Versandmethode:</p>
+                <!-- WhatsApp Button -->
+                <button onclick="openSendModal('whatsapp-input')" 
+                        class="control-button w-full py-3 px-4 rounded-lg font-medium shadow-md bg-green-500 hover:bg-green-600 text-white flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 mr-2">
+                        <path d="M12 2C6.477 2 2 6.477 2 12c0 3.992 2.21 7.42 5.438 9.273l-.68 2.016 2.05-.66a9.986 9.986 0 0 0 3.193.585c5.522 0 10-4.478 10-10S17.522 2 12 2zm3.89 12.51c-.13-.07-.762-.375-.88-.418-.118-.042-.204-.063-.29.063-.086.126-.33.418-.403.504-.075.088-.15.094-.28.024-.13-.07-.547-.2-.93-.574-.29-.283-.483-.633-.64-.852-.158-.22-.017-.253.11-.383.125-.12.29-.28.39-.42.098-.138.13-.23.17-.308.04-.078.02-.148-.002-.204-.022-.058-.29-.7-.393-.95-.104-.254-.208-.218-.29-.222-.084-.004-.18-.004-.275-.004-.095 0-.25.038-.38.17-.13.13-.49.48-.49.994s.5.994.57 1.076c.07.082.97.156 1.88.75.91.595 1.6 1.636 1.84 2.146.24.51.15.556.095.642-.054.088-.118.156-.204.25-.086.094-.173.18-.26.26-.088.086-.16.147-.054.33.106.183.69.75 1.25.99.56.24 1.006.24 1.12.22.115-.02.375-.154.72-.3.345-.148.57-.23.655-.27.084-.04.48.093.564.26.084.168.084.994-.13 1.082-.212.09-.762.33-.88.375-.118.042-.204.063-.29.063z"/>
+                    </svg>
+                    <span data-lang-key="modal_btn_whatsapp">Via WhatsApp senden</span>
+                </button>
+
+                <!-- Email Button -->
+                <button onclick="openSendModal('email-input')" 
+                        class="control-button w-full py-3 px-4 rounded-lg font-medium shadow-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 mr-2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.916A2.25 2.25 0 012.25 6.993V6.75" />
+                    </svg>
+                    <span data-lang-key="modal_btn_email">Via E-Mail senden</span>
+                </button>
+            </div>
+
+            <!-- 2. INPUT VIEW (WhatsApp & Email share this structure) -->
+            <div id="modal-input" class="space-y-4 hidden">
+                <p class="text-sm text-red-500 font-medium" data-lang-key="pdf_note">HINWEIS: Die PDF-Datei wird vor dem Senden automatisch heruntergeladen und muss manuell angehängt werden.</p>
+                <label id="input-label" for="customer-input" class="block text-sm font-medium text-gray-700">Kundennummer:</label>
+                <input type="text" id="customer-input" class="w-full px-3 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="">
+                <button onclick="sendInvoice('confirm')" id="confirm-send-btn" class="w-full py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 font-semibold" data-lang-key="modal_btn_confirm">Bestätigen & PDF generieren</button>
+            </div>
+
+            <!-- 3. ACTION/LOADING/SUCCESS VIEW -->
+            <div id="modal-status" class="space-y-4 hidden">
+                <div id="loading-indicator" class="flex items-center justify-center space-x-2">
+                    <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                    <p class="text-blue-500 font-semibold" data-lang-key="modal_status_loading">PDF wird generiert und heruntergeladen...</p>
+                </div>
+
+                <div id="success-message" class="hidden">
+                    <p class="text-center font-medium text-green-600 mb-4" data-lang-key="modal_status_success">
+                        PDF-Datei erfolgreich heruntergeladen.
+                    </p>
+                    <a id="action-link" href="#" target="_blank" onclick="closeSendModal()" class="w-full py-3 px-4 rounded-lg font-bold text-center bg-gray-100 border border-gray-300 hover:bg-gray-200 text-[var(--primary-blue)] block" data-lang-key="modal_status_action">
+                        WhatsApp öffnen
+                    </a>
+                    <p class="mt-2 text-xs text-gray-500 text-center" data-lang-key="modal_status_reminder">
+                        Bitte hängen Sie die heruntergeladene Rechnung manuell an.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Cancel/Back Button -->
+            <button onclick="closeSendModal()" id="modal-cancel-btn" class="mt-4 w-full text-sm text-gray-500 hover:text-gray-700 font-medium">
+                <span data-lang-key="modal_btn_cancel">Abbrechen</span>
+            </button>
+        </div>
+    </div>
+
+
+    <!-- 
+        =========================================================
+        HIDDEN TEMPLATES FOR DYNAMIC PAGE GENERATION 
+        ========================================================= 
+    -->
+    <div id="static-header-template" class="hidden">
+        <div class="mb-6">
+            <div class="w-full">
+                <div class="flex items-start">
+                    <img src="C:\Users\Julien\Documents\Zuristock\Zuri Stock App\logo-01.png" 
+                         alt="Zuristock Premium Retouren Logo" 
+                         class="h-28 w-28 object-contain mr-4 rounded-md">
+                    <div class="text-sm pt-1">
+                        <p class="font-bold text-[var(--primary-blue)] leading-tight">Zuristock Germany - Inh. Consolata Wendy Kieya</p>
+                        <p class="font-bold text-[var(--primary-blue)] leading-tight">Kegeldamm 2</p>
+                        <p class="font-bold text-[var(--primary-blue)] leading-tight">03149 Forst (Lausitz), Germany</p>
+                        <p class="font-bold text-[var(--primary-blue)] leading-tight">Gewerbe: Kieya Import Export</p>
+                        <p class="mt-1 leading-tight flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1 text-green-600">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.35-1.005-.98-1.156l-3.518-.703a1.986 1.986 0 00-2.072.337l-2.06 2.06c-2.454-1.637-4.43-3.613-6.06-6.06l2.06-2.06c.677-.676.896-1.674.577-2.617l-.703-3.518a1.986 1.986 0 00-1.156-.98H2.25z" />
+                            </svg>
+                            +491 749 394 854
+                        </p>
+                        <p class="leading-tight flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1 text-[var(--primary-blue)]">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.916A2.25 2.25 0 012.25 6.993V6.75" />
+                            </svg>
+                            zuristockgermany@gmail.com
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center title-block">
+            <div class="border-t-2 border-[var(--primary-blue)] mb-2"></div> 
+            <h1 class="font-extrabold text-[var(--primary-blue)] title-block h1" data-lang-key="title_invoice">RECHNUNG</h1> 
+        </div>
+
+        <div class="grid grid-cols-5 header-grid text-xs mb-4">
+            <!-- Customer Details (60%) -->
+            <div class="col-span-3 space-y-2">
+                <div class="flex items-center flex-nowrap">
+                    <label class="font-medium text-[var(--primary-blue)] pr-2 shrink-0 header-label min-w-max" data-lang-key="label_customer_name">Kundenname / Firma:</label>
+                    <input type="text" id="customer-name" value="" data-lang-key-placeholder="placeholder_name" placeholder="Firmenname, Name" class="flex-grow header-input">
+                </div>
+                <div class="flex items-center flex-nowrap">
+                    <label class="font-medium text-[var(--primary-blue)] pr-2 shrink-0 header-label min-w-max" data-lang-key="label_customer_id">Kundennummer:</label>
+                    <input type="text" id="customer-id" value="" data-lang-key-placeholder="placeholder_id" placeholder="z.B. 1007" class="flex-grow header-input">
+                </div>
+                <div class="flex items-center flex-nowrap">
+                    <label class="font-medium text-[var(--primary-blue)] pr-2 shrink-0 header-label min-w-max" data-lang-key="label_customer_address">Kundenadresse:</label>
+                    <input type="text" id="customer-address" value="" data-lang-key-placeholder="placeholder_address" placeholder="Straße, Ort, PLZ" class="flex-grow header-input">
+                </div>
+            </div>
+
+            <!-- Invoice Metadata (40%) -->
+            <div class="col-span-2 space-y-2">
+                <div class="flex justify-between items-center flex-nowrap">
+                    <p class="font-medium pr-4 shrink-0 header-label min-w-max" data-lang-key="label_invoice_num">Rechnungsnummer:</p>
+                    <input type="text" id="invoice-number" value="" class="w-1/3 text-right header-input">
+                </div>
+                <div class="flex justify-between items-center flex-nowrap">
+                    <p class="font-medium pr-4 shrink-0 header-label min-w-max" data-lang-key="label_invoice_date">Rechnungsdatum:</p>
+                    <input type="date" id="invoice-date" value="" class="w-1/3 text-right header-input">
+                </div>
+                <div class="flex justify-between items-center flex-nowrap">
+                    <p class="font-medium pr-4 shrink-0 header-label min-w-max" data-lang-key="label_delivery_date">Lieferdatum:</p>
+                    <input type="date" id="delivery-date" value="" class="w-1/3 text-right header-input">
+                </div>
+                <div class="flex justify-between items-center flex-nowrap">
+                    <p class="font-medium pr-4 shrink-0 header-label min-w-max" data-lang-key="label_due_date">Fälligkeitsdatum:</p>
+                    <input type="date" id="due-date" value="" class="w-1/3 text-right header-input">
+                </div>
+            </div>
+        </div>
+        
+        <p class="intro-text-block text-center mt-4 mb-4" data-lang-key="intro_text">
+            Wir bedanken uns herzlich für die gute Zusammenarbeit und stellen Ihnen - gemäß unserer
+            Vereinbarung - folgende Lieferungen und Leistungen in Rechnung:
+        </p>
+    </div>
+
+    <!-- TEMPLATE 2: Totals and Footer (Only placed on the LAST page) -->
+    <div id="totals-footer-template" class="hidden">
+         <!-- Totals -->
+        <div class="flex justify-end mt-auto" id="totals-container">
+            <div class="w-full max-w-sm">
+                <table class="w-full text-sm">
+                    <tbody>
+                        <tr class="border-t border-gray-300"> 
+                            <td class="text-right pr-4 font-medium py-1" data-lang-key="total_vat">MwSt (19%)</td>
+                            <td class="w-40 text-right font-medium py-1">
+                                <span id="vat-amount-template">0.00 €</span>
+                            </td>
+                        </tr>
+                        <tr class="bg-blue-100">
+                            <td class="text-right pr-4 py-2 font-bold text-lg text-[var(--primary-blue)]" data-lang-key="total_grand">Gesamtpreis</td>
+                            <td class="w-40 text-right py-2 font-extrabold text-xl text-[var(--primary-blue)]">
+                                <span id="grand-total-template">0.00 €</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="border-b-4 border-[var(--primary-blue)] w-full"></div> 
+            </div>
+        </div>
+        
+        <!-- Payment Instructions - Added mt-4 for sentence space after total (Request 4) -->
+        <div class="mt-4 text-sm">
+            <p class="mb-3 text-center" data-lang-key="payment_intro">
+                Die Zahlung ist innerhalb von 14 Tagen nach Erhalt der Rechnung ohne Abzüge auf folgendes Konto zu leisten:
+            </p>
+            <div class="grid grid-cols-2 gap-2 max-w-lg mx-auto">
+                <div class="font-bold text-[var(--primary-blue)]" data-lang-key="bank_account">Kontonummer:</div>
+                <div>DE19180927440002150450</div>
+                
+                <div class="font-bold text-[var(--primary-blue)]" data-lang-key="bank_bank">Bank:</div>
+                <div>Volksbank Spree-Neiße eG</div>
+                
+                <div class="font-bold text-[var(--primary-blue)]" data-lang-key="bank_iban">IBAN:</div>
+                <div>DE19 1809 2744  0002 1504 50</div>
+                
+                <div class="font-bold text-[var(--primary-blue)]" data-lang-key="bank_bic">BIC:</div>
+                <div>GENODEFISPM</div>
+            </div>
+        </div>
+
+        <!-- Business Details Block - Reduced margin for tighter layout -->
+        <div class="mt-4 text-sm text-center">
+            <p class="font-bold text-[var(--primary-blue)]">Zuristock Germany</p>
+            <p>
+                <span data-lang-key="footer_management">Geschäftsführung:</span> Consolata Wendy Kieya
+            </p>
+            <p>
+                <span data-lang-key="footer_vat">USt-IdNr.:</span> DE455046931
+            </p>
+            <p>
+                <span data-lang-key="footer_trade">Gewerbe:</span> Kieya Import Export
+            </p>
+            <p>
+                <span data-lang-key="footer_tax-office">Finanzamt:</span> Cottbus
+            </p>
+        </div>
+
+        <!-- Closing Text -->
+        <p class="mt-8 text-sm text-center" data-lang-key="closing_text">
+            Wir danken Ihnen für Ihren Auftrag und freuen uns auf eine weiterhin erfolgreiche Partnerschaft.
+        </p>
+    </div>
+    
+    <!-- 
+        =========================================================
+        ACTUAL ITEM DATA STORAGE
+        ========================================================= 
+    -->
+
+    <!-- All invoice rows are kept here (Hidden from view) -->
+    <div id="all-item-rows" class="hidden">
+        <!-- Rows will be stored here as div elements with item-data class -->
+    </div>
+
+
+    <script>
+        // --- LANGUAGE DATA ---
+        const LANGUAGES = {
+            de: {
+                title: "Zuristock - Rechnungs-Vorlage",
+                title_invoice: "RECHNUNG",
+                section_language: "SPRACHE",
+                label_customer_name: "Kundenname / Firma:",
+                label_customer_id: "Kundennummer:",
+                label_customer_address: "Kundenadresse:",
+                placeholder_name: "Firmenname, Name",
+                placeholder_id: "z.B. 1007",
+                placeholder_address: "Straße, Ort, PLZ",
+                placeholder_description: "Postenbeschreibung", 
+                label_invoice_num: "Rechnungsnummer:",
+                label_invoice_date: "Rechnungsdatum:",
+                label_delivery_date: "Lieferdatum:",
+                label_due_date: "Fälligkeitsdatum:",
+                intro_text: "Wir bedanken uns herzlich für die gute Zusammenarbeit und stellen Ihnen - gemäß unserer Vereinbarung - folgende Lieferungen und Leistungen in Rechnung:",
+                th_description: "Beschreibung",
+                th_weight: "Gewicht (kg)",
+                th_quantity: "Menge",
+                th_price: "Preis (€)",
+                total_vat: "MwSt (19%)",
+                total_grand: "Gesamtpreis",
+                payment_intro: "Die Zahlung ist innerhalb von 14 Tagen nach Erhalt der Rechnung ohne Abzüge auf folgendes Konto zu leisten:",
+                bank_account: "Kontonummer:",
+                bank_bank: "Bank:",
+                bank_iban: "IBAN:",
+                bank_bic: "BIC:",
+                closing_text: "Wir danken Ihnen für Ihren Auftrag und freuen uns auf eine weiterhin erfolgreiche Partnerschaft.",
+                footer_management: "Geschäftsführung:",
+                footer_trade: "Gewerbe:", 
+                footer_vat: "USt-IdNr.:",
+                footer_tax_office: "Finanzamt:",
+                // NEW/MODIFIED KEYS
+                btn_main_send: "Senden", // The short button text
+                modal_send_title: "Rechnung Senden",
+                modal_send_description: "Wählen Sie die gewünschte Versandmethode:",
+                modal_btn_whatsapp: "Via WhatsApp senden",
+                modal_btn_email: "Via E-Mail senden",
+                modal_btn_cancel: "Abbrechen",
+                modal_btn_confirm: "Bestätigen & PDF generieren",
+                pdf_note: "HINWEIS: Die PDF-Datei wird vor dem Senden automatisch heruntergeladen und muss manuell angehängt werden.",
+                input_label_whatsapp: "Kunden-Telefonnummer (z.B. +4912345678):",
+                input_placeholder_whatsapp: "+49...",
+                input_label_email: "Kunden-E-Mail-Adresse:",
+                input_placeholder_email: "max.mustermann@beispiel.de",
+                modal_status_loading: "PDF wird generiert und heruntergeladen...",
+                modal_status_success: "PDF-Datei erfolgreich heruntergeladen.",
+                modal_status_action_whatsapp: "WhatsApp öffnen",
+                modal_status_action_email: "E-Mail Entwurf öffnen (Gmail/Outlook)",
+                modal_status_reminder: "Bitte hängen Sie die heruntergeladene Rechnung manuell an.",
+            },
+            en: {
+                title: "Zuristock - Invoice Template",
+                title_invoice: "INVOICE",
+                section_language: "LANGUAGE",
+                label_customer_name: "Customer Name / Company:",
+                label_customer_id: "Customer ID:",
+                label_customer_address: "Customer Address:",
+                placeholder_name: "Company Name, Contact",
+                placeholder_id: "e.g., 1007",
+                placeholder_address: "Street, City, ZIP",
+                placeholder_description: "Item description", 
+                label_invoice_num: "Invoice Number:",
+                label_invoice_date: "Invoice Date:",
+                label_delivery_date: "Delivery Date:",
+                label_due_date: "Due Date:",
+                intro_text: "Thank you for your continued cooperation. We hereby bill you for the following goods and services according to our agreement:",
+                th_description: "Description",
+                th_weight: "Weight (kg)",
+                th_quantity: "Quantity",
+                th_price: "Price (€)",
+                total_vat: "VAT (19%)",
+                total_grand: "Grand Total",
+                payment_intro: "Payment is due within 14 days of receipt of the invoice, without deduction, to the following account:",
+                bank_account: "Account Number:",
+                bank_bank: "Bank:",
+                bank_iban: "IBAN:",
+                bank_bic: "BIC:",
+                closing_text: "We thank you for your order and look forward to a continued successful partnership.",
+                footer_management: "Management:",
+                footer_trade: "Trade:", 
+                footer_vat: "VAT ID:",
+                footer_tax_office: "Tax Office:",
+                // NEW/MODIFIED KEYS
+                btn_main_send: "Send", // The short button text
+                modal_send_title: "Send Invoice",
+                modal_send_description: "Select the desired sending method:",
+                modal_btn_whatsapp: "Send via WhatsApp",
+                modal_btn_email: "Send via Email",
+                modal_btn_cancel: "Cancel",
+                modal_btn_confirm: "Confirm & Generate PDF",
+                pdf_note: "NOTE: The PDF file will be automatically downloaded before sending and must be manually attached.",
+                input_label_whatsapp: "Customer Phone Number (e.g. +447700900123):",
+                input_placeholder_whatsapp: "+44...",
+                input_label_email: "Customer Email Address:",
+                input_placeholder_email: "john.doe@example.com",
+                modal_status_loading: "Generating and downloading PDF...",
+                modal_status_success: "PDF file successfully downloaded.",
+                modal_status_action_whatsapp: "Open WhatsApp",
+                modal_status_action_email: "Draft Email (Gmail/Outlook)",
+                modal_status_reminder: "Please manually attach the downloaded invoice.",
+            }
+        };
+
+        let currentLang = 'de';
+        const VAT_RATE = 0.19; 
+        let items = [];
+        // State for the send modal flow
+        let sendMode = null; // 'whatsapp' or 'email'
+
+        // --- CORE APPLICATION LOGIC (UNMODIFIED) ---
+
+        /** Creates a new A4 page container with header/footer accents. */
+        function createNewPage() {
+            const pageWrapper = document.createElement('div');
+            pageWrapper.className = 'invoice-page';
+
+            const rect = document.createElement('div');
+            rect.className = 'header-rectangle'; 
+            pageWrapper.appendChild(rect);
+            
+            const footerRect = document.createElement('div');
+            footerRect.className = 'footer-rectangle'; 
+            pageWrapper.appendChild(footerRect);
+
+            const headerTemplate = document.getElementById('static-header-template');
+            
+            const headerClone = headerTemplate.cloneNode(true);
+            headerClone.classList.remove('hidden');
+            pageWrapper.appendChild(headerClone);
+            
+            const itemTable = document.createElement('table');
+            itemTable.className = 'invoice-table w-full border-collapse mb-4';
+            
+            itemTable.innerHTML = `
+                <thead class="bg-[var(--primary-blue)]"> 
+                    <tr class="text-left text-white"> 
+                        <th class="w-6/12" data-lang-key="th_description">Beschreibung</th>
+                        <th class="w-2/12 text-right" data-lang-key="th_weight">Gewicht (kg)</th>
+                        <th class="w-2/12 text-right" data-lang-key="th_quantity">Menge</th>
+                        <th class="w-2/12 text-right" data-lang-key="th_price">Preis (€)</th>
+                    </tr>
+                </thead>
+                <tbody class="invoice-items-page">
+                </tbody>
+            `;
+            pageWrapper.appendChild(itemTable);
+            
+            return pageWrapper;
+        }
+
+        /** Redraws all invoice pages. */
+        function renderPages() {
+            const wrapper = document.getElementById('invoice-pages-wrapper');
+            wrapper.innerHTML = ''; 
+
+            if (items.length === 0) {
+                wrapper.appendChild(createNewPage());
+                const emptyPage = wrapper.querySelector('.invoice-page');
+                const totalsFooterTemplate = document.getElementById('totals-footer-template');
+                const footerClone = totalsFooterTemplate.cloneNode(true);
+                footerClone.id = 'totals-footer-clone';
+                footerClone.classList.remove('hidden');
+
+                const { formattedVAT, formattedTotal } = getFormattedTotals();
+                footerClone.querySelector('#vat-amount-template').textContent = formattedVAT;
+                footerClone.querySelector('#grand-total-template').textContent = formattedTotal;
+                
+                emptyPage.appendChild(footerClone);
+                updateLanguage();
+                return;
+            }
+
+            let currentPage = null;
+            let currentTBody = null;
+            let rowsAddedToCurrentPage = 0;
+            let pageCount = 0;
+            const MAX_ROWS_PER_PAGE = 28; 
+            
+            items.forEach((item, index) => {
+                if (currentPage === null || rowsAddedToCurrentPage >= MAX_ROWS_PER_PAGE) {
+                    if (currentPage !== null) {
+                        const spacer = document.createElement('div');
+                        spacer.className = 'page-spacer no-print';
+                        spacer.textContent = currentLang === 'de' ? `--- Fortsetzung von Seite ${pageCount} ---` : `--- Continuation from Page ${pageCount} ---`;
+                        wrapper.appendChild(spacer);
+                    }
+                    
+                    currentPage = createNewPage();
+                    wrapper.appendChild(currentPage);
+                    pageCount++;
+                    
+                    currentTBody = currentPage.querySelector('.invoice-items-page');
+                    rowsAddedToCurrentPage = 0;
+                }
+
+                const row = createItemRowElement(item, index);
+                currentTBody.appendChild(row);
+                rowsAddedToCurrentPage++;
+            });
+
+            if (currentPage) {
+                const totalsFooterTemplate = document.getElementById('totals-footer-template');
+                const footerClone = totalsFooterTemplate.cloneNode(true);
+                footerClone.id = 'totals-footer-clone';
+                footerClone.classList.remove('hidden');
+
+                const vatSpan = footerClone.querySelector('#vat-amount-template');
+                const totalSpan = footerClone.querySelector('#grand-total-template');
+
+                const { formattedVAT, formattedTotal } = getFormattedTotals();
+                
+                if (vatSpan) vatSpan.textContent = formattedVAT;
+                if (totalSpan) totalSpan.textContent = formattedTotal;
+
+                currentPage.appendChild(footerClone);
+            }
+            
+            applyAlternatingRowColors(wrapper);
+            updateLanguage();
+        }
+
+
+        /** Creates an editable table row element (tr). */
+        function createItemRowElement(item, index) {
+            const row = document.createElement('tr');
+            row.dataset.itemId = item.id;
+
+            row.innerHTML = `
+                <td class="w-6/12">
+                    <input type="text" value="${item.desc}" class="w-full item-description" oninput="updateItemData(${item.id}, 'desc', this.value)" placeholder="${LANGUAGES[currentLang].placeholder_description}">
+                </td>
+                <td class="w-2/12 text-right">
+                    <input type="text" value="${item.weight}" class="text-right item-weight" oninput="updateItemData(${item.id}, 'weight', this.value)" step="any" placeholder="0">
+                </td>
+                <td class="w-2/12 text-right">
+                    <input type="text" value="${item.quantity}" class="text-right item-quantity" oninput="updateItemData(${item.id}, 'quantity', this.value)" placeholder="0">
+                </td>
+                <td class="w-2/12 text-right">
+                    <input type="text" value="${item.price === 0 ? '' : item.price}" class="text-right item-price" oninput="updateItemData(${item.id}, 'price', this.value); updateTotals()" step="0.01" placeholder="0.00">
+                </td>
+            `;
+            return row;
+        }
+
+        function updateItemData(id, prop, value) {
+            const itemIndex = items.findIndex(i => i.id === id);
+            if (itemIndex > -1) {
+                if (prop === 'price' || prop === 'weight') {
+                    items[itemIndex][prop] = parseFloat(value.replace(',', '.')) || 0;
+                } else if (prop === 'quantity') {
+                    items[itemIndex][prop] = value;
+                } else {
+                    items[itemIndex][prop] = value;
+                }
+            }
+        }
+
+        function addNewItemRow() {
+            const newItem = {
+                id: Date.now(),
+                desc: '',
+                weight: '',
+                quantity: '',
+                price: 0
+            };
+            items.push(newItem);
+            renderPages(); 
+            updateTotals();
+            
+            // Focus on the description input of the newly added row
+            setTimeout(() => {
+                const newRows = document.querySelectorAll('.invoice-items-page tr');
+                if (newRows.length > 0) {
+                    const lastRow = newRows[newRows.length - 1];
+                    const firstInput = lastRow.querySelector('.item-description');
+                    if (firstInput) {
+                        firstInput.focus();
+                    }
+                }
+            }, 0);
+        }
+
+        function deleteLastItemRow() {
+            if (items.length > 0) {
+                items.pop();
+                renderPages();
+                updateTotals();
+            }
+        }
+        
+        function applyAlternatingRowColors(wrapper) {
+            const allRows = wrapper.querySelectorAll('.invoice-items-page tr');
+            allRows.forEach((row, i) => {
+                const rowClass = i % 2 === 0 ? 'bg-blue-50' : 'bg-white';
+                row.className = rowClass;
+            });
+        }
+
+        function getFormattedTotals() {
+            let subtotal = 0;
+            items.forEach(item => {
+                subtotal += item.price;
+            });
+
+            const vatAmount = subtotal * VAT_RATE;
+            const grandTotal = subtotal + vatAmount;
+
+            const locale = currentLang === 'de' ? 'de-DE' : 'en-US';
+            const currencySymbol = ' €'; 
+
+            const formatNumber = (num) => {
+                return new Intl.NumberFormat(locale, {
+                    style: 'decimal',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }).format(num);
+            };
+
+            return {
+                formattedVAT: formatNumber(vatAmount) + currencySymbol,
+                formattedTotal: formatNumber(grandTotal) + currencySymbol
+            };
+        }
+
+        function updateTotals() {
+            const { formattedVAT, formattedTotal } = getFormattedTotals();
+            
+            const vatSpan = document.getElementById('vat-amount-template');
+            const totalSpan = document.getElementById('grand-total-template');
+
+            if (vatSpan && totalSpan) {
+                vatSpan.textContent = formattedVAT;
+                totalSpan.textContent = formattedTotal;
+            }
+
+            updateLanguage();
+        }
+
+        function updateLanguage() {
+            const dictionary = LANGUAGES[currentLang];
+            
+            document.querySelectorAll('[data-lang-key]').forEach(el => {
+                const key = el.getAttribute('data-lang-key');
+                if (dictionary[key]) {
+                    // Only update text content if it's not an input or doesn't contain a child element we want to preserve
+                    if (el.tagName !== 'INPUT' && el.children.length === 0) {
+                         el.textContent = dictionary[key];
+                    } else if (el.tagName === 'TITLE') {
+                        document.title = dictionary[key];
+                    }
+                }
+            });
+            
+            document.querySelectorAll('[data-lang-key-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-lang-key-placeholder');
+                if (dictionary[key]) {
+                    el.placeholder = dictionary[key];
+                }
+            });
+            
+            document.querySelectorAll('.item-description').forEach(input => {
+                input.placeholder = dictionary.placeholder_description;
+            });
+            
+            // Re-apply specific text content for buttons that contain icons/spans
+            document.querySelector('#sending-section button[data-lang-key="btn_main_send"]').textContent = dictionary.btn_main_send;
+        }
+        
+        // --- KEYBOARD SHORTCUT LOGIC ---
+        
+        /**
+         * Handles keyboard events for the item table:
+         * - Enter: Adds a new row.
+         * - Delete/Backspace: Deletes the last row (only if input is empty).
+         */
+        function handleTableKeyEvents(event) {
+            // Check if the target is an input field inside the element with class 'invoice-page'
+            const target = event.target;
+            const isTableInput = target.tagName === 'INPUT' && target.closest('.invoice-page');
+
+            if (!isTableInput) {
+                return;
+            }
+
+            // 1. Enter Key (Add new row)
+            if (event.key === 'Enter') {
+                event.preventDefault(); // Stop default form submission/focus movement
+                addNewItemRow();
+            } 
+            // 2. Delete/Backspace Keys (Delete last row)
+            else if (event.key === 'Delete' || event.key === 'Backspace') {
+                // Only trigger if the input is empty to avoid interrupting typing/editing
+                if (target.value.toString().trim() === '' && items.length > 1) {
+                     event.preventDefault(); // Stop default navigation/backspace behavior
+                     deleteLastItemRow();
+                }
+            }
+        }
+
+
+        // --- MODAL & PDF GENERATION LOGIC ---
+
+        // Helper to show/hide modal content areas
+        function setModalView(view) {
+            document.getElementById('modal-selection').classList.add('hidden');
+            document.getElementById('modal-input').classList.add('hidden');
+            document.getElementById('modal-status').classList.add('hidden');
+            
+            if (view === 'selection') {
+                document.getElementById('modal-selection').classList.remove('hidden');
+                document.getElementById('modal-cancel-btn').textContent = LANGUAGES[currentLang].modal_btn_cancel;
+            } else if (view === 'input') {
+                document.getElementById('modal-input').classList.remove('hidden');
+            } else if (view === 'status') {
+                document.getElementById('modal-status').classList.remove('hidden');
+            }
+        }
+
+        /** Opens the Send Modal and sets the initial view or input view. */
+        function openSendModal(view = 'selection', mode = null) {
+            document.getElementById('send-modal').classList.remove('hidden');
+            document.getElementById('invoice-pages-wrapper').style.filter = 'blur(1px)';
+            setModalView(view);
+            
+            if (view === 'selection') {
+                sendMode = null; // Reset mode
+                document.querySelector('#modal-cancel-btn').classList.remove('hidden');
+            } else if (view === 'whatsapp-input' || view === 'email-input') {
+                sendMode = view.includes('whatsapp') ? 'whatsapp' : 'email';
+                
+                const dictionary = LANGUAGES[currentLang];
+                const inputLabel = document.getElementById('input-label');
+                const inputField = document.getElementById('customer-input');
+                
+                if (sendMode === 'whatsapp') {
+                    inputLabel.textContent = dictionary.input_label_whatsapp;
+                    inputField.placeholder = dictionary.input_placeholder_whatsapp;
+                    inputField.type = 'tel';
+                } else {
+                    inputLabel.textContent = dictionary.input_label_email;
+                    inputField.placeholder = dictionary.input_placeholder_email;
+                    inputField.type = 'email';
+                }
+                // Clear input
+                inputField.value = '';
+                
+                setModalView('input');
+                document.querySelector('#modal-cancel-btn').classList.remove('hidden');
+            }
+        }
+
+        /** Closes the Send Modal. */
+        function closeSendModal() {
+            document.getElementById('send-modal').classList.add('hidden');
+            document.getElementById('invoice-pages-wrapper').style.filter = 'none';
+            sendMode = null; // Reset mode
+        }
+
+        /** Initiates the PDF generation and final send action. */
+        function sendInvoice() {
+            const inputField = document.getElementById('customer-input');
+            const customerDetail = inputField.value.trim();
+            const customerName = document.getElementById('customer-name').value.trim() || 'Customer';
+            const invoiceNumber = document.getElementById('invoice-number').value.trim() || '0000';
+            
+            if (!customerDetail) {
+                // Since alert() is banned, change the button text temporarily to warn the user
+                const confirmBtn = document.getElementById('confirm-send-btn');
+                const originalText = confirmBtn.textContent;
+                confirmBtn.textContent = currentLang === 'de' ? 'Feld darf nicht leer sein!' : 'Field cannot be empty!';
+                confirmBtn.classList.add('bg-red-500');
+                
+                setTimeout(() => {
+                    confirmBtn.textContent = originalText;
+                    confirmBtn.classList.remove('bg-red-500');
+                }, 1500);
+                return;
+            }
+            
+            // Show loading status
+            setModalView('status');
+            document.getElementById('loading-indicator').classList.remove('hidden');
+            document.getElementById('success-message').classList.add('hidden');
+            document.querySelector('#modal-cancel-btn').classList.add('hidden'); // Cannot cancel during generation
+
+            // 1. Generate PDF
+            generateInvoicePDF(customerName, invoiceNumber).then(() => {
+                document.getElementById('loading-indicator').classList.add('hidden');
+                document.getElementById('success-message').classList.remove('hidden');
+                document.querySelector('#modal-cancel-btn').classList.remove('hidden');
+
+                // 2. Set Action Link
+                const actionLink = document.getElementById('action-link');
+                const dictionary = LANGUAGES[currentLang];
+                
+                let linkUrl, linkText;
+                
+                if (sendMode === 'whatsapp') {
+                    // Sanitize number for URL (remove non-digits except '+')
+                    const sanitizedNumber = customerDetail.replace(/[^\d+]/g, ''); 
+                    
+                    linkUrl = `https://wa.me/${sanitizedNumber}?text=${encodeURIComponent(
+                        currentLang === 'de' ? `Hallo ${customerName}, hier ist Ihre Rechnung ${invoiceNumber}. Bitte hängen Sie die heruntergeladene PDF-Datei an.` :
+                        `Hello ${customerName}, here is your Invoice ${invoiceNumber}. Please attach the downloaded PDF file.`
+                    )}`;
+                    linkText = dictionary.modal_status_action_whatsapp;
+
+                } else if (sendMode === 'email') {
+                    const subject = currentLang === 'de' ? `Rechnung ${invoiceNumber} von Zuristock Germany` : `Invoice ${invoiceNumber} from Zuristock Germany`;
+                    const body = currentLang === 'de' ? 
+                        `Sehr geehrte/r ${customerName},\n\nanbei erhalten Sie die Rechnung ${invoiceNumber} im Anhang. Bitte hängen Sie die heruntergeladene PDF-Datei an den Entwurf an.\n\nMit freundlichen Grüßen,\nIhr Zuristock Team` :
+                        `Dear ${customerName},\n\nPlease find Invoice ${invoiceNumber} attached. Kindly attach the downloaded PDF file to this draft.\n\nBest regards,\nYour Zuristock Team`;
+                        
+                    // Using mailto: to open email client (like Gmail or Outlook)
+                    linkUrl = `mailto:${customerDetail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    linkText = dictionary.modal_status_action_email;
+                }
+                
+                actionLink.href = linkUrl;
+                actionLink.textContent = linkText;
+
+            }).catch(error => {
+                console.error("PDF Generation failed:", error);
+                document.getElementById('loading-indicator').classList.add('hidden');
+                document.getElementById('success-message').classList.remove('hidden');
+                const errorText = currentLang === 'de' ? "Fehler bei der PDF-Generierung." : "Error during PDF generation.";
+                document.querySelector('#success-message p').textContent = errorText;
+                document.getElementById('action-link').classList.add('hidden');
+                document.querySelector('#modal-cancel-btn').classList.remove('hidden');
+            });
+        }
+
+        /**
+         * Generates and downloads the invoice as a PDF file.
+         */
+        async function generateInvoicePDF(customerName, invoiceNumber) {
+            const { jsPDF } = window.jspdf;
+            const element = document.getElementById('invoice-pages-wrapper');
+            const pages = element.querySelectorAll('.invoice-page');
+
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = 210;
+            const pageHeight = 297;
+            const margin = 12.7; // 12.7mm (0.5 inch) margin, based on CSS padding
+
+            // Iterate through each invoice page element
+            for (let i = 0; i < pages.length; i++) {
+                if (i > 0) {
+                    pdf.addPage();
+                }
+
+                const page = pages[i];
+                // Use the page element size for rendering (important for multi-page)
+                const canvas = await html2canvas(page, {
+                    scale: 2, // Use higher scale for better resolution
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: true
+                });
+
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                
+                // Calculate width and height of the image to fit A4 page
+                const imgWidth = pageWidth;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+            }
+
+            // Clean up names
+            const safeCustomerName = customerName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const safeInvoiceNumber = invoiceNumber.replace(/[^a-z0-9]/gi, '_');
+
+            const filename = `Rechnung_${safeInvoiceNumber}_${safeCustomerName}.pdf`;
+            pdf.save(filename);
+        }
+
+        // --- INITIALIZATION AND UI HANDLING ---
+        
+        // Initial setup for language sections
+        let langSection, itemSection, sendingSection, printingSection, btnEN, btnDE, colorBands;
+        
+        const colors = {
+            en: {
+                shadowClass: 'shadow-lg-en', 
+                bandClasses: ['color-band-en-1', 'color-band-en-2', 'color-band-en-3'],
+                buttonClasses: { active: 'bg-blue-500 text-white hover:bg-blue-600', inactive: 'bg-white text-gray-700 hover:bg-gray-50' }
+            },
+            de: {
+                shadowClass: 'shadow-lg-de', 
+                bandClasses: ['color-band-de-1', 'color-band-de-2', 'color-band-de-3'],
+                buttonClasses: { active: 'bg-black text-white hover:bg-gray-800', inactive: 'bg-white text-gray-700 hover:bg-gray-50' }
+            }
+        };
+
+        function setLanguage(lang) {
+            currentLang = lang;
+
+            const isEnglish = lang === 'en';
+            const active = isEnglish ? colors.en : colors.de;
+            const inactive = isEnglish ? colors.de : colors.en;
+            
+            // Initialization check
+            if (!langSection) {
+                 langSection = document.getElementById('language-section');
+                 itemSection = document.getElementById('item-management-section');
+                 sendingSection = document.getElementById('sending-section');
+                 printingSection = document.getElementById('printing-section');
+                 btnEN = document.getElementById('btn-en');
+                 btnDE = document.getElementById('btn-de');
+                 colorBands = [
+                    document.getElementById('band-1'), 
+                    document.getElementById('band-2'), 
+                    document.getElementById('band-3')
+                ];
+            }
+
+            const activeBtn = isEnglish ? btnEN : btnDE;
+            const inactiveBtn = isEnglish ? btnDE : btnEN;
+            
+            const allSections = [langSection, itemSection, sendingSection, printingSection];
+            const shadowClass = active.shadowClass;
+            const oppositeShadowClass = inactive.shadowClass;
+            
+            // 1. Update ALL Section Shadows
+            allSections.forEach(section => {
+                if (section) {
+                    section.classList.remove(oppositeShadowClass);
+                    section.classList.add(shadowClass);
+                }
+            });
+
+            // 2. Update Language Header Text
+            document.getElementById('language-header-title').textContent = LANGUAGES[currentLang].section_language;
+
+            // 3. Update Color Bands (Flag Colors)
+            colorBands.forEach((band, index) => {
+                Object.values(colors).forEach(c => c.bandClasses.forEach(cls => band.classList.remove(cls)));
+                band.classList.add(active.bandClasses[index]);
+            });
+
+            // 4. Update Button Styles
+            btnEN.classList.remove(...colors.en.buttonClasses.active.split(' ').filter(cls => cls));
+            btnEN.classList.add(...colors.en.buttonClasses.inactive.split(' ').filter(cls => cls));
+            btnDE.classList.remove(...colors.de.buttonClasses.active.split(' ').filter(cls => cls));
+            btnDE.classList.add(...colors.de.buttonClasses.inactive.split(' ').filter(cls => cls));
+
+            activeBtn.classList.remove(...active.buttonClasses.inactive.split(' ').filter(cls => cls));
+            activeBtn.classList.add(...active.buttonClasses.active.split(' ').filter(cls => cls));
+            
+            updateTotals(); // This calls updateLanguage() and updates the totals/language strings
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            addNewItemRow(); 
+
+            langSection = document.getElementById('language-section');
+            itemSection = document.getElementById('item-management-section');
+            sendingSection = document.getElementById('sending-section');
+            printingSection = document.getElementById('printing-section');
+            btnEN = document.getElementById('btn-en');
+            btnDE = document.getElementById('btn-de');
+            colorBands = [
+                document.getElementById('band-1'), 
+                document.getElementById('band-2'), 
+                document.getElementById('band-3')
+            ];
+
+            setLanguage(currentLang); 
+            
+            // Add the new keydown listener globally for table shortcuts
+            document.addEventListener('keydown', handleTableKeyEvents);
+        });
+
+        // Set up event listeners for inputs in the header to force re-render/re-apply translations
+        document.querySelectorAll('#customer-name, #customer-id, #customer-address, #invoice-number, #invoice-date, #delivery-date, #due-date').forEach(input => {
+             input.addEventListener('input', updateLanguage);
+             input.addEventListener('change', updateLanguage);
+        });
+
+    </script>
+</body>
+</html>

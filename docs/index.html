@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zuristock - Website Loading</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+        /* Apply smooth transition for the fade-out effect */
+        #splash-screen {
+            /* Uses Inter font globally */
+            font-family: 'Inter', sans-serif; 
+            transition: opacity 0.5s ease-out, visibility 0.5s;
+            z-index: 9999; /* Ensure it is always on top */
+            position: fixed;
+            inset: 0;
+        }
+
+        /* Style the video to cover the entire screen */
+        #splash-video {
+            object-fit: cover;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* * ==========================================================
+         * CUSTOM STYLES FOR THE ANIMATED BORDER
+         * ==========================================================
+         */
+        #loading-box-wrapper {
+            position: relative;
+            /* Padding defines the area around the text where the border draws */
+            padding: 1.5rem 3rem; 
+        }
+
+        /* Base style for all four line segments */
+        .border-line {
+            position: absolute;
+            background-color: #ffffff; /* Bright white line */
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.9); /* Bright glow effect */
+            transition: all 0.2s linear; /* For the instant completion jump */
+            transform-origin: center;
+        }
+
+        /* Line 1: Top Right - Animates from center out (50% of the top bar) */
+        #line-top-right { top: 0; left: 50%; height: 3px; width: 0; }
+        /* Line 2: Top Left - Animates from center out (50% of the top bar) */
+        #line-top-left { top: 0; right: 50%; height: 3px; width: 0; }
+        /* Line 3: Right Side - Animates down */
+        #line-right { top: 0; right: 0; width: 3px; height: 0; }
+        /* Line 4: Bottom Side - Animates left */
+        #line-bottom { bottom: 0; right: 0; height: 3px; width: 0; }
+        /* Line 5: Left Side - Animates up (The line that stops at 60% / 90% completion) */
+        #line-left { bottom: 0; left: 0; width: 3px; height: 0; }
+        
+        /* ----------------------------------------------------------
+         * KEYFRAME ANIMATIONS (Total 3.0s, stopping at 90% progress)
+         * ----------------------------------------------------------
+         */
+        
+        /* Line 1 & 2: Top Bar (Completes in 0.75s) */
+        .animate-draw #line-top-right { animation: draw-top-right 0.75s linear forwards; }
+        @keyframes draw-top-right { to { width: 50%; } }
+
+        .animate-draw #line-top-left { animation: draw-top-left 0.75s linear forwards; }
+        @keyframes draw-top-left { to { width: 50%; } }
+
+        /* Line 3: Right Bar (Completes in 0.75s, starts at 0.75s) */
+        .animate-draw #line-right { animation: draw-right 0.75s linear 0.75s forwards; }
+        @keyframes draw-right { to { height: 100%; } }
+
+        /* Line 4: Bottom Bar (Completes in 0.75s, starts at 1.5s) */
+        .animate-draw #line-bottom { animation: draw-bottom 0.75s linear 1.5s forwards; }
+        @keyframes draw-bottom { to { width: 100%; } }
+
+        /* Line 5: Left Bar (Animates to 60% of its length in 0.75s, starts at 2.25s) */
+        .animate-draw #line-left { animation: draw-left-partial 0.75s linear 2.25s forwards; }
+        @keyframes draw-left-partial { 
+            0% { height: 0; }
+            /* This is where the animation stops naturally before the timer hits 3.0s */
+            100% { height: 60%; } 
+        }
+
+        /* Final State Class: Used by JS to complete the line instantly and start fade-out */
+        .ready-to-fade #line-left {
+            /* Override height transition to instantly complete the line when the timer finishes */
+            height: 100%;
+        }
+
+    </style>
+</head>
+<body class="bg-black min-h-screen">
+
+    <!-- 
+        ============================================================
+        1. THE SPLASH SCREEN CONTAINER (Visible for 3 seconds)
+        ============================================================
+    -->
+    <div id="splash-screen" class="flex items-center justify-center bg-black">
+        
+        <!-- Background Video (Autoplay, Loop, Muted for compatibility) -->
+        <video id="splash-video" autoplay loop muted playsinline>
+            <!-- Placeholder Source - CHANGE THIS URL to your desired loading video -->
+            <source src="https://assets.mixkit.co/videos/preview/mixkit-abstract-blue-liquid-ink-background-3004-large.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+
+        <!-- Loading Overlay, Developer Name, and Animated Border -->
+        <div class="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-50">
+            
+            <div id="loading-box-wrapper" class="relative animate-draw">
+                <!-- Line Elements for Clockwise Drawing -->
+                <div id="line-top-right" class="border-line"></div>
+                <div id="line-top-left" class="border-line"></div>
+                <div id="line-right" class="border-line"></div>
+                <div id="line-bottom" class="border-line"></div>
+                <div id="line-left" class="border-line"></div>
+
+                <h1 class="text-6xl sm:text-8xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600 animate-pulse tracking-widest" style="font-family: 'Inter', sans-serif;">
+                    ZURISTOCK
+                </h1>
+            </div>
+            
+            <!-- Simple loading bar/message -->
+            <p class="text-white text-sm mt-8 opacity-75 animate-pulse">
+                LOADING EXPERIENCE...
+            </p>
+
+        </div>
+
+    </div>
+
+    <!-- 
+        ============================================================
+        2. JAVASCRIPT LOGIC
+        ============================================================
+    -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const splashScreen = document.getElementById('splash-screen');
+            const splashVideo = document.getElementById('splash-video');
+            const loadingBoxWrapper = document.getElementById('loading-box-wrapper');
+            
+            // >>>>>>>>>>>>>>>>> CONFIGURATION <<<<<<<<<<<<<<<<<
+            // Define the URL the user should be redirected to after the splash screen is done.
+            const nextPageUrl = 'login.html'; // <<< TARGET HTML FILE
+            // 3.0 seconds for the entire loading duration (including border animation)
+            const duration = 3000; 
+            // 0.5 seconds for the CSS fade-out transition
+            const fadeDuration = 500; 
+            // >>>>>>>>>>>>>>>>> CONFIGURATION <<<<<<<<<<<<<<<<<
+
+            // 1. Attempt to start video playback
+            splashVideo.play().catch(error => {
+                // Video failed to play (e.g., due to user interaction policies).
+                console.warn("Video playback failure or interruption, proceeding with animation only.", error);
+            }); 
+
+            // 2. Set the timer for the transition (App is 'ready' after 3 seconds)
+            setTimeout(proceedToMainContent, duration);
+
+            function proceedToMainContent() {
+                // Step 1: Complete the final 40% of the left box line instantly 
+                // (This creates the "snapping to finish" effect)
+                loadingBoxWrapper.classList.add('ready-to-fade');
+                
+                // Step 2: Start the screen fade-out effect
+                splashScreen.style.opacity = '0';
+
+                // Step 3: After the fade transition is complete, redirect the user
+                setTimeout(() => {
+                    // This hides the splash screen element
+                    splashScreen.style.visibility = 'hidden';
+                    
+                    // This is the automatic redirection to the next page
+                    window.location.href = nextPageUrl; 
+
+                }, fadeDuration);
+            }
+        });
+    </script>
+
+</body>
+</html>
